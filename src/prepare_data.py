@@ -117,7 +117,7 @@ def engineer_features(train_events, test_events, train_labels, split_type, inclu
 
 def prepare_data(include_historical=True, split_type='chronological', filter_cascades=True):
     suffix = "_filtered" if filter_cascades else ""
-    output_dir = Path(__file__).parent.parent / f"{split_type}{suffix}_prepared_data"
+    output_dir = Path(__file__).parent.parent / "data" / f"{split_type}{suffix}_prepared_data"
 
     events_df, labels_binary = load_data(year_range=(2010, 2025), filter_cascades=filter_cascades)
     train_events, test_events, train_labels, test_labels = split_data(events_df, labels_binary, split_type=split_type, test_size=TEST_SIZE)
