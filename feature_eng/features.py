@@ -89,14 +89,14 @@ def engineer_impact_features(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def engineer_event_type_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Create features based on event type."""
+    """Create features based on event type (one-hot + group flags)."""
     df = df.copy()
     if 'EVENT_TYPE' not in df.columns:
         return df
     
-    event_types = sorted(df['EVENT_TYPE'].unique())
-    type_to_code = {t: i for i, t in enumerate(event_types)}
-    df['event_type_encoded'] = df['EVENT_TYPE'].map(type_to_code)
+    # One-hot encode EVENT_TYPE (replaces ordinal encoding)
+    dummies = pd.get_dummies(df['EVENT_TYPE'], prefix='etype').astype(int)
+    df = pd.concat([df, dummies], axis=1)
     
     hurricane_types = ['Hurricane', 'Hurricane (Typhoon)', 'Tropical Storm', 'Tropical Depression', 'Storm Surge/Tide']
     flood_types = ['Flash Flood', 'Flood', 'Coastal Flood', 'Lakeshore Flood']
@@ -290,7 +290,7 @@ def get_feature_columns(df: pd.DataFrame, exclude_cols: Optional[List[str]] = No
         exclude_cols = []
     
     critical_exclude = [
-        'EVENT_ID', 'EPISODE_ID', 'LOCATION_KEY',
+        'EVENT_ID', 'EPISODE_ID', 'LOCATION_KEY', '_orig_idx',
         'target', 'is_cascade_result', 'triggered_any_cascade',
     ]
     

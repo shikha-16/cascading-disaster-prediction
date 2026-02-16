@@ -10,7 +10,7 @@ from features import engineer_base_features, get_feature_columns
 from aggregate_features import AggregateFeatureTransformer
 
 # Path to the primary labeled dataset
-FULL_DATA_PATH = Path("/Users/varshel/Documents/10718/Project/cascading-disaster-prediction/data/processed/events_labeled_full.csv")
+FULL_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "processed" / "events_labeled_full.csv"
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 
@@ -49,11 +49,12 @@ def load_data(year_range=(2010, 2025), filter_cascades=True):
     print("Expanding labels...")
     target_series = df['target'].apply(parse_target)
     labels_binary = pd.DataFrame(0, index=df.index, columns=CASCADE_TYPES)
-    df['triggered_any_cascade'] = (labels_binary.sum(axis=1) > 0).astype(int)
-    events_df = df.copy()
     
     for label in CASCADE_TYPES:
         labels_binary[label] = target_series.apply(lambda x: 1 if label in x else 0)
+    
+    df['triggered_any_cascade'] = (labels_binary.sum(axis=1) > 0).astype(int)
+    events_df = df.copy()
     
     # Parse dates
     for col in ['BEGIN_DATETIME', 'END_DATETIME']:
@@ -95,15 +96,20 @@ def engineer_features(train_events, test_events, train_labels, split_type, inclu
     if split_type == 'random':
         include_historical = False
     
-    # Base features
+    # Base features (may re-sort rows via engineer_historical_features)
     train_featured = engineer_base_features(train_events, include_historical=include_historical)
     test_featured = engineer_base_features(test_events, include_historical=include_historical)
     
     # Aggregate features (Location stats + Transition probabilities)
     # Only meaningful for chronological split where we fit on past and transform present
     if split_type == 'chronological':
+        # Realign labels to match the (possibly re-sorted) featured DataFrame
+        if '_orig_idx' in train_featured.columns:
+            aligned_labels = train_labels.iloc[train_featured['_orig_idx'].values].reset_index(drop=True)
+        else:
+            aligned_labels = train_labels
         agg_transformer = AggregateFeatureTransformer()
-        train_featured = agg_transformer.fit_transform(train_featured, train_labels)
+        train_featured = agg_transformer.fit_transform(train_featured, aligned_labels)
         test_featured = agg_transformer.transform(test_featured)
         
     feature_cols = get_feature_columns(train_featured)
@@ -116,12 +122,38 @@ def prepare_data(include_historical=True, split_type='chronological', filter_cas
     events_df, labels_binary = load_data(year_range=(2010, 2025), filter_cascades=filter_cascades)
     train_events, test_events, train_labels, test_labels = split_data(events_df, labels_binary, split_type=split_type, test_size=TEST_SIZE)
     
+    # Track original row order so labels stay aligned after feature engineering
+    # (engineer_historical_features re-sorts by LOCATION_KEY)
+    train_events = train_events.copy()
+    test_events = test_events.copy()
+    train_events['_orig_idx'] = np.arange(len(train_events))
+    test_events['_orig_idx'] = np.arange(len(test_events))
+    
     train_featured, test_featured, feature_cols = engineer_features(
         train_events, test_events, train_labels, split_type, include_historical
     )
     
+    # Restore chronological order (engineer_historical_features may have re-sorted
+    # by LOCATION_KEY) so the saved .npy files are in time order for the notebook
+    # to do a clean chronological val split from the tail end.
+    if '_orig_idx' in train_featured.columns:
+        train_chrono = train_featured['_orig_idx'].values.argsort()
+        test_chrono  = test_featured['_orig_idx'].values.argsort()
+        train_featured = train_featured.iloc[train_chrono].reset_index(drop=True)
+        test_featured  = test_featured.iloc[test_chrono].reset_index(drop=True)
+    
+    # Labels are already in chronological order from split_data, no reorder needed
+    y_train = train_labels.values
+    y_test  = test_labels.values
+    
+    # Remove tracker from features
+    feature_cols = [c for c in feature_cols if c != '_orig_idx']
+    
+    # Align one-hot columns: add missing cols as 0, drop extra cols
+    for col in feature_cols:
+        if col not in test_featured.columns:
+            test_featured[col] = 0
     X_train, X_test = train_featured[feature_cols].fillna(0), test_featured[feature_cols].fillna(0)
-    y_train, y_test = train_labels.values, test_labels.values
     target_names = train_labels.columns.tolist()
 
     # Remove zero-variance features
