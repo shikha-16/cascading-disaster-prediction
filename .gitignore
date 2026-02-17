@@ -1,5 +1,4 @@
-data/noaa_data/
-data/processed/
+data/
 
 # PyDrive2 OAuth2 credentials (each team member creates their own)
 credentials.json
