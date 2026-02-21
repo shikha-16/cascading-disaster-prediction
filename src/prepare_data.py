@@ -164,15 +164,21 @@ def prepare_data(include_historical=True, split_type='chronological', filter_cas
         X_train = X_train[feature_cols]
         X_test = X_test[feature_cols]
     
-    # Remove labels with < 10 positive samples in train
-    print("\nFiltering labels with insufficient samples (< 10)...")
+    # Remove labels with < MIN_POS_FRAC of training samples (same as notebooks)
+    MIN_POS_FRAC = 0.0005  # 0.05% — matches notebook HP-tuning threshold
+    min_pos_count = int(len(y_train) * MIN_POS_FRAC)
+    print(f"\nFiltering labels with < {MIN_POS_FRAC*100:.2f}% train positives "
+          f"(< {min_pos_count:,} samples)...")
     label_counts = y_train.sum(axis=0)
-    label_mask = label_counts >= 10
-    if (~label_mask).any():
-        print(f"  Removing {(~label_mask).sum()} labels. Kept {label_mask.sum()} labels.")
+    label_mask = label_counts >= min_pos_count
+    n_dropped = (~label_mask).sum()
+    if n_dropped > 0:
+        dropped = [t for t, keep in zip(target_names, label_mask) if not keep]
+        print(f"  Dropping {n_dropped} labels: {dropped}")
         y_train = y_train[:, label_mask]
         y_test = y_test[:, label_mask]
         target_names = [t for t, keep in zip(target_names, label_mask) if keep]
+    print(f"  Kept {label_mask.sum()} labels: {target_names}")
     
     output_dir.mkdir(parents=True, exist_ok=True)
     np.save(output_dir / "X_train.npy", X_train.values)
