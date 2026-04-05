@@ -1,14 +1,17 @@
 # Feature Engineering Pipeline
 
-This sub-package handles the transformation of raw labeled data into feature matrices suitable for machine learning models. It supports both base event-level feature engineering and advanced aggregate statistics.
+The `src/` package handles the transformation of raw labeled data into feature matrices suitable for machine learning models. It supports both base event-level feature engineering and advanced aggregate statistics.
 
-## Data Preparation (`prepare_data.py`)
+See [features.md](features.md) for the full catalog of engineered features.
+
+## Data Preparation (`src/prepare_data.py`)
 
 Handles the splitting, filtering, and transformation workflow.
 
 ### Usage
 
 ```bash
+cd src
 python prepare_data.py --split_type [random|chronological] --filter_cascades [True|False]
 ```
 
@@ -23,7 +26,7 @@ python prepare_data.py --split_type [random|chronological] --filter_cascades [Tr
 
 ## Feature Engineering Components
 
-### Base Features (`features.py`)
+### Base Features (`src/features.py`)
 
 The pipeline generates several categories of features. Now includes improved impact parsing and detailed event metrics.
 
@@ -36,7 +39,7 @@ The pipeline generates several categories of features. Now includes improved imp
 | **Tornado** | Specific metrics: intensity (F-scale), path length, width, and path area. |
 | **Historical** | Moving window statistics (7 and 30 days) for cumulative damage and event frequency in the same location/state. |
 
-### Aggregate Statistics (`aggregate_features.py`)
+### Aggregate Statistics (`src/aggregate_features.py`)
 
 The `AggregateFeatureTransformer` "learns" historical patterns from the training set to create predictive features:
 
@@ -53,5 +56,3 @@ Processed data is saved to subdirectories based on configuration (e.g., `random_
 - `X_train.npy`, `X_test.npy`: Feature matrices.
 - `y_train.npy`, `y_test.npy`: Target labels (multilabel format).
 - `metadata.pkl`: Stores `feature_names`, `target_names`, and the configuration flags.
-
-

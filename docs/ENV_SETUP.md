@@ -1,41 +1,48 @@
-# Environment setup (Miniconda + pip alternatives)
+# Environment Setup
 
-This project supports two common workflows: a Conda-based environment (recommended with Miniconda) and a pip/pyproject workflow.
+This project requires Python 3.12. Two setup workflows are supported.
 
-Conda (recommended)
+## Option 1: Conda (recommended)
 
-1. Install Miniconda from https://docs.conda.io/en/latest/miniconda.html
-2. Create the environment and install packages:
+1. Install [Miniconda](https://docs.conda.io/en/latest/miniconda.html).
+2. Create the environment:
 
-```powershell
+```bash
 conda env create -f environment.yml
 conda activate cascading-disaster
 ```
 
-3. Register the environment kernel for Jupyter (optional):
+3. (Optional) Register a Jupyter kernel:
 
-```powershell
+```bash
 python -m ipykernel install --user --name=cascading-disaster --display-name "Cascading Disaster (py3.12)"
 ```
 
-Pip / pyproject (venv)
+## Option 2: pip / venv
 
-1. Create a venv and activate (Windows):
+1. Create and activate a virtual environment:
 
-```powershell
+```bash
 python -m venv .venv
+
+# macOS / Linux
+source .venv/bin/activate
+
+# Windows PowerShell
 .\.venv\Scripts\Activate.ps1
 ```
 
-2. Install editable package and dependencies from `pyproject.toml`:
+2. Install the project in editable mode:
 
-```powershell
-python -m pip install --upgrade pip
+```bash
+pip install --upgrade pip
 pip install -e .
 pip install ipykernel nbformat notebook
 python -m ipykernel install --user --name=cascading-disaster-py --display-name "Cascading Disaster (venv)"
 ```
 
-Notes
-- If you prefer `jupyter lab` replace `notebook` with `jupyterlab` in the commands above.
-- The `environment.yml` uses `conda-forge`. If you hit package resolution issues, try updating conda: `conda update -n base -c defaults conda`.
+## Notes
+
+- If you prefer JupyterLab, replace `notebook` with `jupyterlab` in the commands above.
+- The `environment.yml` uses the `conda-forge` channel. If you hit resolution issues, try `conda update -n base -c defaults conda`.
+- XGBoost and additional ML libraries will be pulled in by `pyproject.toml` dependencies automatically.
