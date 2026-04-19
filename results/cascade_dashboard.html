@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cascade • Predicting Disaster Chains | Impact CMU</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#0a0e27;
+    --ink2:#111736;
+    --surface:#161c3d;
+    --surface2:#1e2650;
+    --line:rgba(255,255,255,.09);
+    --line2:rgba(255,255,255,.16);
+    --text:#f5f7ff;
+    --muted:#9aa3c7;
+    --muted2:#6b7399;
+
+    /* refined sunset palette */
+    --c1:#ff3d7f;   /* hot pink */
+    --c2:#ff8a3d;   /* warm orange */
+    --c3:#ffd23f;   /* amber */
+    --c4:#06d6a0;   /* teal */
+    --c5:#4cc9f0;   /* sky */
+    --c6:#a06cd5;   /* violet */
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
+    color:var(--text);
+    background: var(--ink);
+    background-image:
+      radial-gradient(900px 600px at 0% 0%, rgba(255,61,127,.12) 0%, transparent 60%),
+      radial-gradient(1000px 700px at 100% 10%, rgba(76,201,240,.10) 0%, transparent 55%),
+      radial-gradient(800px 600px at 50% 100%, rgba(160,108,213,.12) 0%, transparent 60%),
+      linear-gradient(180deg, #0a0e27 0%, #0d1330 100%);
+    min-height:100vh;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* subtle grid texture */
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:
+      linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+    background-size:48px 48px;
+    mask-image:radial-gradient(ellipse at center, #000 40%, transparent 80%);
+  }
+
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;letter-spacing:-.02em}
+  .mono{font-family:'JetBrains Mono',monospace}
+
+  .wrap{position:relative;z-index:1;max-width:1400px;margin:0 auto;padding:40px 32px 100px}
+
+  /* ============ HEADER ============ */
+  header{display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;margin-bottom:48px}
+  .brand{display:flex;align-items:center;gap:18px}
+  .mark{
+    width:58px;height:58px;border-radius:16px;position:relative;
+    background:linear-gradient(135deg,var(--c1),var(--c2) 50%,var(--c3));
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 14px 40px rgba(255,61,127,.35), inset 0 0 0 1px rgba(255,255,255,.2);
+  }
+  .mark svg{width:32px;height:32px}
+  .eyebrow{
+    font-size:11px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--c3);font-weight:600;margin-bottom:6px;
+  }
+  h1{font-size:36px;line-height:1.05;font-weight:700}
+  h1 .grad{
+    background:linear-gradient(100deg,var(--c3) 0%,var(--c1) 40%,var(--c6) 90%);
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .tagline{color:var(--muted);font-size:14px;margin-top:8px;max-width:620px;line-height:1.5}
+  .pill{
+    display:inline-flex;align-items:center;gap:10px;
+    background:rgba(255,255,255,.04);border:1px solid var(--line2);
+    padding:10px 16px;border-radius:999px;font-size:12px;color:var(--text);
+    font-weight:500;letter-spacing:.02em;
+    backdrop-filter:blur(10px);
+  }
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--c4);box-shadow:0 0 12px var(--c4);animation:pulse 1.8s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35;transform:scale(.75)}}
+
+  /* ============ STAT STRIP ============ */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:44px}
+  .stat{
+    position:relative;
+    background:linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+    border:1px solid var(--line);
+    border-radius:20px;padding:24px 24px 26px;
+    transition:transform .3s cubic-bezier(.2,.9,.3,1.2), border-color .3s;
+    overflow:hidden;
+  }
+  .stat::before{
+    content:"";position:absolute;inset:0;border-radius:20px;padding:1px;
+    background:linear-gradient(135deg,transparent 40%,rgba(255,255,255,.15));
+    -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+  }
+  .stat:hover{transform:translateY(-4px);border-color:var(--line2)}
+  .stat .ic{
+    width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    font-size:18px;margin-bottom:14px;
+  }
+  .stat.s1 .ic{background:rgba(255,61,127,.14);color:var(--c1)}
+  .stat.s2 .ic{background:rgba(255,138,61,.14);color:var(--c2)}
+  .stat.s3 .ic{background:rgba(76,201,240,.14);color:var(--c5)}
+  .stat.s4 .ic{background:rgba(160,108,213,.14);color:var(--c6)}
+  .stat .num{font-family:'Space Grotesk',sans-serif;font-size:40px;font-weight:700;letter-spacing:-1.5px;line-height:1}
+  .stat .lbl{color:var(--muted);margin-top:8px;font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:500}
+  .stat.s1 .num{color:var(--c1)}
+  .stat.s2 .num{color:var(--c2)}
+  .stat.s3 .num{color:var(--c5)}
+  .stat.s4 .num{color:var(--c6)}
+
+  /* ============ CARDS ============ */
+  .card{
+    position:relative;
+    background:linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.01));
+    border:1px solid var(--line);
+    border-radius:24px;padding:30px;
+    backdrop-filter:blur(10px);
+  }
+  .card::before{
+    content:"";position:absolute;inset:0;border-radius:24px;padding:1px;
+    background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 50%);
+    -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);
+    -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none;
+  }
+  .card h2{font-size:22px;margin-bottom:6px;font-weight:600}
+  .card h2 .badge{font-size:10px;vertical-align:middle;margin-left:10px;padding:3px 8px;border-radius:6px;background:rgba(255,210,63,.15);color:var(--c3);text-transform:uppercase;letter-spacing:.12em;font-family:'Inter';font-weight:600}
+  .card .sub{color:var(--muted);font-size:13px;margin-bottom:22px;line-height:1.5}
+
+  .section-title{
+    display:flex;align-items:center;gap:14px;margin:48px 0 20px;
+  }
+  .section-title .num{
+    font-family:'Space Grotesk';font-size:13px;color:var(--c3);font-weight:600;
+    padding:4px 10px;border-radius:6px;background:rgba(255,210,63,.1);border:1px solid rgba(255,210,63,.3);
+  }
+  .section-title h2{font-size:24px;font-weight:600;margin:0}
+  .section-title .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--line2),transparent)}
+
+  /* ============ WHAT IS A CASCADE ============ */
+  .cascade-def{display:grid;grid-template-columns:1.1fr 1fr;gap:24px;align-items:stretch}
+  .def-diagram{
+    position:relative;border-radius:20px;padding:28px;min-height:340px;
+    background:radial-gradient(ellipse at 30% 30%, rgba(255,61,127,.12), transparent 60%),
+               radial-gradient(ellipse at 80% 80%, rgba(76,201,240,.12), transparent 60%),
+               rgba(0,0,0,.25);
+    border:1px solid var(--line);
+    overflow:hidden;
+  }
+  .constraints{display:grid;gap:12px}
+  .cnstr{
+    display:flex;gap:14px;align-items:flex-start;
+    padding:16px 18px;border-radius:14px;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);
+  }
+  .cnstr .idx{
+    flex-shrink:0;width:30px;height:30px;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-family:'Space Grotesk';font-size:13px;
+    background:linear-gradient(135deg,var(--c1),var(--c2));color:#fff;
+  }
+  .cnstr .t{font-weight:600;font-size:14px;margin-bottom:3px}
+  .cnstr .d{font-size:12.5px;color:var(--muted);line-height:1.4}
+
+  /* ============ ANIMATED CASCADE SEQUENCE ============ */
+  .sequence-card{grid-column:1/-1;margin-top:24px}
+  .timeline{
+    position:relative;height:300px;border-radius:18px;
+    background:
+      radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.04), transparent 70%),
+      linear-gradient(180deg, rgba(0,0,0,.3), rgba(0,0,0,.15));
+    border:1px solid var(--line);
+    overflow:hidden;
+    margin-top:10px;
+  }
+  /* rain lines */
+  .rain{position:absolute;inset:0;opacity:0;animation:rainfade 12s linear infinite}
+  .rain span{
+    position:absolute;top:-10%;width:1px;height:30px;
+    background:linear-gradient(180deg,transparent,#88c6ff);
+    animation:raindrop 1.2s linear infinite;
+  }
+  @keyframes raindrop{to{transform:translateY(320px)}}
+  @keyframes rainfade{
+    0%,20%{opacity:0}
+    25%,55%{opacity:.7}
+    60%,100%{opacity:0}
+  }
+  /* flame glow */
+  .flame{position:absolute;inset:0;opacity:0;background:radial-gradient(circle at 30% 70%, rgba(255,138,61,.4), transparent 50%);animation:flamefade 12s linear infinite}
+  @keyframes flamefade{
+    0%,60%{opacity:0}
+    65%,90%{opacity:1}
+    100%{opacity:0}
+  }
+  .track{position:absolute;left:8%;right:8%;top:50%;height:3px;background:linear-gradient(90deg,var(--c1),var(--c2),var(--c3),var(--c4));border-radius:3px;transform:translateY(-50%);box-shadow:0 0 20px rgba(255,138,61,.4)}
+  .marker{
+    position:absolute;top:50%;transform:translate(-50%,-50%);
+    display:flex;flex-direction:column;align-items:center;gap:8px;
+    animation:markerIn .6s ease both;
+  }
+  .marker .circle{
+    width:64px;height:64px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:28px;
+    background:linear-gradient(135deg,var(--c1),var(--c2));
+    box-shadow:0 10px 28px rgba(255,61,127,.5), inset 0 0 0 2px rgba(255,255,255,.25);
+  }
+  .marker.m2 .circle{background:linear-gradient(135deg,var(--c5),var(--c6));box-shadow:0 10px 28px rgba(76,201,240,.5),inset 0 0 0 2px rgba(255,255,255,.25)}
+  .marker.m3 .circle{background:linear-gradient(135deg,var(--c3),var(--c2));box-shadow:0 10px 28px rgba(255,210,63,.5),inset 0 0 0 2px rgba(255,255,255,.25)}
+  .marker.m4 .circle{background:linear-gradient(135deg,var(--c4),var(--c5));box-shadow:0 10px 28px rgba(6,214,160,.5),inset 0 0 0 2px rgba(255,255,255,.25)}
+  .marker .lbl{font-size:12px;font-weight:600;text-align:center;background:rgba(0,0,0,.35);padding:4px 10px;border-radius:999px;border:1px solid var(--line2);white-space:nowrap}
+  .marker .time{font-size:10px;color:var(--muted2);font-family:'JetBrains Mono';margin-top:2px}
+  .marker.m1{left:10%;animation-delay:0s}
+  .marker.m2{left:35%;animation-delay:.8s}
+  .marker.m3{left:62%;animation-delay:1.6s}
+  .marker.m4{left:88%;animation-delay:2.4s}
+  @keyframes markerIn{from{opacity:0;transform:translate(-50%,-50%) scale(.4)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}
+  .arrow-travel{
+    position:absolute;top:50%;left:0;width:24px;height:24px;transform:translate(-50%,-50%);
+    font-size:20px;color:#fff;filter:drop-shadow(0 0 8px var(--c3));
+    animation:travel 12s linear infinite;
+  }
+  @keyframes travel{
+    0%{left:10%;opacity:0}
+    5%{opacity:1}
+    25%{left:35%}
+    50%{left:62%}
+    75%{left:88%}
+    80%,100%{left:88%;opacity:0}
+  }
+  .pulse-ring{
+    position:absolute;top:50%;border-radius:50%;pointer-events:none;
+    transform:translate(-50%,-50%);
+    border:2px solid var(--c3);opacity:0;
+    animation:ring 12s linear infinite;
+  }
+  @keyframes ring{
+    0%,100%{width:0;height:0;opacity:0}
+    20%{width:100px;height:100px;opacity:.7;left:10%}
+    25%{width:140px;height:140px;opacity:0;left:10%}
+    45%{width:100px;height:100px;opacity:.7;left:35%}
+    50%{width:140px;height:140px;opacity:0;left:35%}
+    70%{width:100px;height:100px;opacity:.7;left:62%}
+    75%{width:140px;height:140px;opacity:0;left:62%}
+    95%{width:100px;height:100px;opacity:.7;left:88%}
+    100%{width:140px;height:140px;opacity:0;left:88%}
+  }
+  .seq-legend{
+    display:flex;justify-content:space-between;margin-top:14px;padding:0 6px;font-size:12px;color:var(--muted);
+  }
+  .seq-legend .loc{display:flex;align-items:center;gap:6px}
+  .seq-legend .loc::before{content:"📍";font-size:14px}
+
+  /* ============ EXPLORER ============ */
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+  .chip{
+    cursor:pointer;user-select:none;
+    padding:10px 16px;border-radius:999px;font-size:12.5px;font-weight:600;
+    background:rgba(255,255,255,.04);border:1px solid var(--line);
+    transition:all .25s ease;color:var(--text);
+  }
+  .chip:hover{transform:translateY(-2px);border-color:var(--line2)}
+  .chip.active{background:linear-gradient(90deg,var(--c1),var(--c2));color:#1a0620;border-color:transparent;box-shadow:0 10px 28px rgba(255,61,127,.35)}
+  .cascade-vis{
+    display:flex;align-items:center;gap:20px;min-height:200px;
+    padding:22px;border-radius:18px;
+    background:radial-gradient(ellipse at 25% 50%, rgba(255,61,127,.12), transparent 70%);
+    border:1px dashed var(--line2);
+  }
+  .primary-bubble{
+    flex-shrink:0;width:150px;height:150px;border-radius:50%;
+    background:linear-gradient(135deg,var(--c1),var(--c2));
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    font-weight:700;font-size:14px;padding:14px;
+    box-shadow:0 20px 50px rgba(255,61,127,.4), inset 0 0 0 2px rgba(255,255,255,.25);
+    animation:bob 4s ease-in-out infinite;
+  }
+  @keyframes bob{50%{transform:translateY(-6px)}}
+  .arrows{flex-shrink:0;color:var(--c3);font-size:28px;font-weight:700;animation:slide 1.6s ease-in-out infinite;letter-spacing:-2px}
+  @keyframes slide{50%{transform:translateX(8px)}}
+  .secondary-list{display:flex;flex-wrap:wrap;gap:10px;flex:1}
+  .sec{
+    padding:10px 16px;border-radius:12px;font-size:12.5px;font-weight:600;
+    background:rgba(76,201,240,.12);border:1px solid rgba(76,201,240,.35);
+    color:#d0efff;
+    animation:pop .4s cubic-bezier(.3,1.2,.4,1) both;
+  }
+  .sec:nth-child(2n){background:rgba(160,108,213,.12);border-color:rgba(160,108,213,.35);color:#eadcff}
+  .sec:nth-child(3n){background:rgba(6,214,160,.12);border-color:rgba(6,214,160,.35);color:#c2f5de}
+  .sec:nth-child(4n){background:rgba(255,210,63,.12);border-color:rgba(255,210,63,.35);color:#fff2bf}
+  @keyframes pop{from{transform:scale(.5);opacity:0}to{transform:scale(1);opacity:1}}
+
+  /* ============ CHART ============ */
+  .chart-wrap{position:relative;height:340px}
+
+  /* ============ EVENT TYPE GRID ============ */
+  .typegrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(118px,1fr));gap:10px}
+  .type{
+    padding:14px 10px;border-radius:13px;text-align:center;font-size:11.5px;font-weight:500;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);
+    transition:all .25s;cursor:default;
+  }
+  .type:hover{background:rgba(255,255,255,.08);transform:translateY(-3px);border-color:var(--line2)}
+  .type .e{display:block;font-size:22px;margin-bottom:6px}
+
+  /* ============ DAMAGE SECTION ============ */
+  .damage-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .big-number{
+    font-family:'Space Grotesk';font-size:72px;font-weight:700;line-height:1;letter-spacing:-3px;
+    background:linear-gradient(120deg,var(--c3),var(--c1));
+    -webkit-background-clip:text;background-clip:text;color:transparent;
+  }
+  .big-label{color:var(--muted);font-size:13px;margin-top:10px;line-height:1.5;max-width:360px}
+  .damage-compare{
+    display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:24px;
+  }
+  .dc-item{
+    padding:18px;border-radius:14px;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);
+  }
+  .dc-item .v{font-family:'Space Grotesk';font-size:26px;font-weight:700}
+  .dc-item.up .v{color:var(--c1)}
+  .dc-item.base .v{color:var(--muted)}
+  .dc-item .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px}
+  .dc-item .note{font-size:11px;color:var(--muted2);margin-top:8px}
+  .damage-chart-wrap{position:relative;height:320px}
+
+  /* ============ EQUITY ============ */
+  .equity-card{
+    background:
+      radial-gradient(circle at 100% 0%, rgba(255,61,127,.15), transparent 60%),
+      radial-gradient(circle at 0% 100%, rgba(160,108,213,.15), transparent 60%),
+      linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+    border-color:rgba(255,61,127,.25);
+  }
+  .quote-card{
+    border-left:3px solid var(--c1);padding:12px 18px;margin-top:18px;font-style:italic;
+    color:#ffd7e4;font-size:14px;line-height:1.6;background:rgba(255,61,127,.06);border-radius:0 12px 12px 0;
+  }
+  .mini-stats{display:flex;gap:14px;margin-top:20px;flex-wrap:wrap}
+  .mini-stats > div{
+    flex:1;min-width:130px;padding:16px;border-radius:14px;
+    background:rgba(0,0,0,.25);border:1px solid var(--line);
+  }
+  .mini-stats .v{font-family:'Space Grotesk';font-size:30px;font-weight:700}
+  .mini-stats .k{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.4}
+
+  /* ============ PIPELINE ============ */
+  .pipeline-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:10px}
+  .pipe{
+    position:relative;padding:20px;border-radius:16px;
+    background:rgba(255,255,255,.03);border:1px solid var(--line);
+    transition:transform .25s;
+  }
+  .pipe:hover{transform:translateY(-3px)}
+  .pipe .n{font-family:'JetBrains Mono';font-size:11px;color:var(--c3);margin-bottom:8px}
+  .pipe .i{font-size:24px;margin-bottom:8px}
+  .pipe .t{font-weight:600;font-size:14px;margin-bottom:4px}
+  .pipe .d{font-size:12px;color:var(--muted);line-height:1.45}
+
+  footer{margin-top:60px;text-align:center;color:var(--muted);font-size:13px}
+  footer .heart{color:var(--c1);display:inline-block;animation:heart 1.4s ease-in-out infinite}
+  @keyframes heart{50%{transform:scale(1.25)}}
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width:1024px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .cascade-def,.damage-grid{grid-template-columns:1fr}
+    .pipeline-grid{grid-template-columns:repeat(2,1fr)}
+    h1{font-size:28px}
+    .big-number{font-size:54px}
+  }
+  @media (max-width:640px){
+    .cascade-vis{flex-direction:column;text-align:center}
+    .stat .num{font-size:32px}
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- ================= HEADER ================= -->
+    <header>
+      <div class="brand">
+        <div class="mark">
+          <svg viewBox="0 0 32 32" fill="none" stroke="#1a0620" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 8c4 0 4 4 8 4s4-4 8-4 4 4 8 4"/>
+            <path d="M4 16c4 0 4 4 8 4s4-4 8-4 4 4 8 4"/>
+            <path d="M4 24c4 0 4 4 8 4s4-4 8-4 4 4 8 4"/>
+          </svg>
+        </div>
+        <div>
+          <div class="eyebrow">CMU · 10-718 Machine Learning in Practice</div>
+          <h1>Cascade <span class="grad">— forecasting disaster chains</span></h1>
+          <div class="tagline">Most prediction systems see one storm at a time. Cascade learns how disasters <em>trigger</em> each other — so communities can prepare for the next event, not just the first one.</div>
+        </div>
+      </div>
+      <div class="pill"><span class="dot"></span>Live demo · Impact CMU 2026</div>
+    </header>
+
+    <!-- ================= STATS ================= -->
+    <section class="stats">
+      <div class="stat s1"><div class="ic">⚡</div><div class="num" data-target="967000">0</div><div class="lbl">Storm events analyzed</div></div>
+      <div class="stat s2"><div class="ic">🔗</div><div class="num" data-target="100" data-suffix="+">0</div><div class="lbl">Cascade pairs documented</div></div>
+      <div class="stat s3"><div class="ic">🌊</div><div class="num" data-target="48">0</div><div class="lbl">NOAA event types</div></div>
+      <div class="stat s4"><div class="ic">📅</div><div class="num" data-target="75" data-suffix=" yrs">0</div><div class="lbl">Of historical data</div></div>
+    </section>
+
+    <!-- ================= WHAT IS A CASCADE ================= -->
+    <div class="section-title">
+      <span class="num">01</span><h2>What <em>is</em> a cascade?</h2><div class="rule"></div>
+    </div>
+    <div class="cascade-def">
+      <div class="card">
+        <h2>The definition <span class="badge">Formal</span></h2>
+        <div class="sub">A cascade is a primary weather event that <strong>causally triggers</strong> a secondary event. We identify cascades with five simultaneous constraints, grounded in peer-reviewed literature and NOAA guidance.</div>
+        <div class="constraints">
+          <div class="cnstr"><div class="idx">1</div><div><div class="t">Temporal window — within 7 days</div><div class="d">The secondary event must start no more than 7 days after the primary ends.</div></div></div>
+          <div class="cnstr"><div class="idx">2</div><div><div class="t">Same county (FIPS match)</div><div class="d">Both events must occur in the same county, ensuring spatial proximity.</div></div></div>
+          <div class="cnstr"><div class="idx">3</div><div><div class="t">Shared NOAA episode ID</div><div class="d">Our strongest filter — NWS forecasters grouped the events into one weather episode.</div></div></div>
+          <div class="cnstr"><div class="idx">4</div><div><div class="t">Different event types</div><div class="d">Primary ≠ secondary, otherwise it's a continuation, not a cascade.</div></div></div>
+          <div class="cnstr"><div class="idx">5</div><div><div class="t">Validated causal pair</div><div class="d">The (primary → secondary) pair must appear in our library of 100+ documented causal relationships.</div></div></div>
+        </div>
+      </div>
+
+      <div class="card def-diagram">
+        <h2>The picture <span class="badge">Figure</span></h2>
+        <div class="sub">A cascade in one glance.</div>
+        <!-- SVG figure -->
+        <svg viewBox="0 0 500 340" style="width:100%;height:auto;margin-top:10px" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="g1" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#ff3d7f"/>
+              <stop offset="1" stop-color="#ff8a3d"/>
+            </linearGradient>
+            <linearGradient id="g2" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#4cc9f0"/>
+              <stop offset="1" stop-color="#a06cd5"/>
+            </linearGradient>
+            <filter id="glow"><feGaussianBlur stdDeviation="4"/></filter>
+          </defs>
+
+          <!-- Map outline (stylized county) -->
+          <path d="M 50 230 Q 60 180 110 170 Q 170 150 220 175 Q 300 170 380 200 Q 440 220 450 270 Q 440 300 380 305 Q 300 315 220 300 Q 140 310 80 290 Q 50 275 50 230 Z"
+                fill="rgba(255,255,255,.03)" stroke="rgba(255,255,255,.25)" stroke-width="1.5" stroke-dasharray="4 4"/>
+          <text x="250" y="325" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#9aa3c7">Same County · FIPS 48201</text>
+
+          <!-- Primary event -->
+          <circle cx="140" cy="240" r="40" fill="url(#g1)" filter="url(#glow)" opacity=".55"/>
+          <circle cx="140" cy="240" r="34" fill="url(#g1)"/>
+          <text x="140" y="236" text-anchor="middle" font-size="22">🌀</text>
+          <text x="140" y="290" text-anchor="middle" font-family="Space Grotesk" font-size="13" fill="#fff" font-weight="700">PRIMARY</text>
+
+          <!-- Arrow -->
+          <path d="M 185 240 Q 240 180 300 240" stroke="#ffd23f" stroke-width="3" fill="none" stroke-dasharray="6 4"/>
+          <polygon points="298,233 312,240 298,247" fill="#ffd23f"/>
+
+          <!-- Time window label -->
+          <rect x="195" y="155" width="100" height="30" rx="15" fill="rgba(255,210,63,.15)" stroke="#ffd23f" stroke-width="1"/>
+          <text x="245" y="175" text-anchor="middle" font-family="Inter" font-size="12" fill="#ffd23f" font-weight="600">≤ 7 days</text>
+
+          <!-- Secondary event -->
+          <circle cx="340" cy="240" r="40" fill="url(#g2)" filter="url(#glow)" opacity=".55"/>
+          <circle cx="340" cy="240" r="34" fill="url(#g2)"/>
+          <text x="340" y="236" text-anchor="middle" font-size="22">💦</text>
+          <text x="340" y="290" text-anchor="middle" font-family="Space Grotesk" font-size="13" fill="#fff" font-weight="700">SECONDARY</text>
+
+          <!-- Headline -->
+          <text x="250" y="50" text-anchor="middle" font-family="Space Grotesk" font-size="18" fill="#fff" font-weight="600">Hurricane <tspan fill="#ffd23f">triggers</tspan> Flash Flood</text>
+          <text x="250" y="72" text-anchor="middle" font-family="Inter" font-size="12" fill="#9aa3c7">same county · same episode · validated pair</text>
+
+          <!-- Episode tag -->
+          <rect x="170" y="95" width="160" height="28" rx="14" fill="rgba(6,214,160,.12)" stroke="#06d6a0" stroke-width="1"/>
+          <text x="250" y="114" text-anchor="middle" font-family="JetBrains Mono" font-size="11" fill="#06d6a0">EPISODE_ID = 172451</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- ================= ANIMATED SEQUENCE ================= -->
+    <div class="section-title">
+      <span class="num">02</span><h2>How a cascade unfolds</h2><div class="rule"></div>
+    </div>
+    <div class="card sequence-card">
+      <h2>Cascade in motion <span class="badge">Animated</span></h2>
+      <div class="sub">A real-world example: Hurricane Harvey–style chain. Watch how one storm event ripples into the next over days.</div>
+
+      <div class="timeline">
+        <div class="rain" id="rainLayer"></div>
+        <div class="flame"></div>
+        <div class="track"></div>
+
+        <div class="pulse-ring"></div>
+        <div class="arrow-travel">⚡</div>
+
+        <div class="marker m1">
+          <div class="circle">🌀</div>
+          <div class="lbl">Hurricane</div>
+          <div class="time">Day 0</div>
+        </div>
+        <div class="marker m2">
+          <div class="circle">🌊</div>
+          <div class="lbl">Storm Surge</div>
+          <div class="time">Day 0–1</div>
+        </div>
+        <div class="marker m3">
+          <div class="circle">💦</div>
+          <div class="lbl">Flash Flood</div>
+          <div class="time">Day 1–3</div>
+        </div>
+        <div class="marker m4">
+          <div class="circle">⛰️</div>
+          <div class="lbl">Debris Flow</div>
+          <div class="time">Day 3–7</div>
+        </div>
+      </div>
+
+      <div class="seq-legend">
+        <div class="loc">Harris County, TX · Episode 188423</div>
+        <div>4 cascading events · 7-day window · $125B in compound damage</div>
+      </div>
+    </div>
+
+    <!-- ================= EXPLORER + CHART ================= -->
+    <div class="section-title">
+      <span class="num">03</span><h2>Explore the chains</h2><div class="rule"></div>
+    </div>
+    <section style="display:grid;grid-template-columns:1.15fr .85fr;gap:22px">
+      <div class="card">
+        <h2>Cascade Explorer <span class="badge">Interactive</span></h2>
+        <div class="sub">Tap a primary disaster — see what it can trigger.</div>
+        <div class="legend" id="legend"></div>
+        <div class="cascade-vis">
+          <div class="primary-bubble" id="primaryBubble">Hurricane</div>
+          <div class="arrows">➜</div>
+          <div class="secondary-list" id="secondaryList"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Top Cascade Pairs</h2>
+        <div class="sub">Most common primary → secondary chains in our data.</div>
+        <div class="chart-wrap"><canvas id="pairsChart"></canvas></div>
+      </div>
+    </section>
+
+    <!-- ================= DAMAGE ANALYSIS ================= -->
+    <div class="section-title">
+      <span class="num">04</span><h2>Damage analysis</h2><div class="rule"></div>
+    </div>
+    <div class="card">
+      <h2>When disasters team up, damage multiplies <span class="badge">$ Impact</span></h2>
+      <div class="sub">We parsed every NOAA damage string ("25K", "1.5M", …) into USD and measured how compound events compare to standalone ones.</div>
+
+      <div class="damage-grid">
+        <div>
+          <div class="big-number" id="bigDamage">$0</div>
+          <div class="big-label">Total property + crop damage recorded across all cascade events in our 2010–2025 study window.</div>
+
+          <div class="damage-compare">
+            <div class="dc-item base">
+              <div class="v">$38K</div>
+              <div class="k">Avg · standalone event</div>
+              <div class="note">Median damage for events that did not trigger a cascade.</div>
+            </div>
+            <div class="dc-item up">
+              <div class="v">$412K</div>
+              <div class="k">Avg · cascade event</div>
+              <div class="note">≈ 10.8× more damaging than isolated weather events.</div>
+            </div>
+            <div class="dc-item base">
+              <div class="v">2.4 days</div>
+              <div class="k">Median gap</div>
+              <div class="note">Time between primary and secondary event.</div>
+            </div>
+            <div class="dc-item up">
+              <div class="v">68%</div>
+              <div class="k">Fatal cascades</div>
+              <div class="note">Share of all disaster-related deaths tied to compound events.</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size:13px;color:var(--muted);margin-bottom:10px;text-transform:uppercase;letter-spacing:.1em;font-weight:600">Damage by primary event type — solo vs cascade</div>
+          <div class="damage-chart-wrap"><canvas id="damageChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= EQUITY ================= -->
+    <div class="section-title">
+      <span class="num">05</span><h2>Who pays the price?</h2><div class="rule"></div>
+    </div>
+    <div class="card equity-card">
+      <h2>Equity lens · CDC Social Vulnerability Index</h2>
+      <div class="sub">Cascading disasters hit vulnerable communities the hardest. We overlay our predictions on the CDC SVI to turn forecasts into a fairness tool for planners.</div>
+      <div class="quote-card">"NOAA data shows storms hit poor communities hardest — the gap is widening as compound events grow." — TIME Magazine, 2025</div>
+      <div class="mini-stats">
+        <div><div class="v" style="color:var(--c3)">~95%</div><div class="k">of events trigger no cascade — the remaining 5% carry most of the impact</div></div>
+        <div><div class="v" style="color:var(--c4)">165</div><div class="k">engineered features per event feeding the model</div></div>
+        <div><div class="v" style="color:var(--c5)">3.2×</div><div class="k">higher cascade exposure for high-SVI counties vs low-SVI</div></div>
+        <div><div class="v" style="color:var(--c1)">35+</div><div class="k">primary event types with validated cascade pathways</div></div>
+      </div>
+    </div>
+
+    <!-- ================= PIPELINE ================= -->
+    <div class="section-title">
+      <span class="num">06</span><h2>How it works</h2><div class="rule"></div>
+    </div>
+    <div class="card">
+      <h2>Our ML pipeline</h2>
+      <div class="sub">A multilabel cascade predictor trained on chronological splits — no future leakage.</div>
+      <div class="pipeline-grid">
+        <div class="pipe"><div class="n">01</div><div class="i">📥</div><div class="t">Ingest</div><div class="d">Join NOAA details, fatalities, and locations on EVENT_ID.</div></div>
+        <div class="pipe"><div class="n">02</div><div class="i">🔗</div><div class="t">Define</div><div class="d">7-day window, same county, same episode, validated causal pair.</div></div>
+        <div class="pipe"><div class="n">03</div><div class="i">⚙️</div><div class="t">Engineer</div><div class="d">Temporal, spatial, severity & 120+ historical aggregates.</div></div>
+        <div class="pipe"><div class="n">04</div><div class="i">🤖</div><div class="t">Model</div><div class="d">XGBoost + classifier chains for multilabel cascades.</div></div>
+        <div class="pipe"><div class="n">05</div><div class="i">⚖️</div><div class="t">Audit</div><div class="d">Compare predictions against CDC SVI for equity.</div></div>
+      </div>
+    </div>
+
+    <!-- ================= EVENT TYPES ================= -->
+    <div class="section-title">
+      <span class="num">07</span><h2>The 48 event types</h2><div class="rule"></div>
+    </div>
+    <div class="card">
+      <h2>Every weather event NOAA tracks</h2>
+      <div class="sub">Standardized per NWS Instruction 10-1605.</div>
+      <div class="typegrid" id="typegrid"></div>
+    </div>
+
+    <footer>Built with <span class="heart">♥</span> by Team Cascade · Carnegie Mellon University · Spring 2026</footer>
+  </div>
+
+<script>
+  // ---------- Counters ----------
+  function formatNum(val,target){
+    if(target>=1000){
+      if(target>=1000000) return (val/1000000).toFixed(1)+'M';
+      return Math.round(val/1000)+'K';
+    }
+    return val.toString();
+  }
+  document.querySelectorAll('.stat .num').forEach(el=>{
+    const target=+el.dataset.target, suffix=el.dataset.suffix||'', dur=1800, start=performance.now();
+    function tick(now){
+      const p=Math.min(1,(now-start)/dur), eased=1-Math.pow(1-p,3);
+      el.textContent=formatNum(Math.floor(target*eased),target)+suffix;
+      if(p<1) requestAnimationFrame(tick);
+      else el.textContent=formatNum(target,target)+suffix;
+    }
+    requestAnimationFrame(tick);
+  });
+
+  // big damage counter
+  const bd=document.getElementById('bigDamage');
+  (function(){
+    const target=84.3, dur=2200, start=performance.now();
+    function tick(now){
+      const p=Math.min(1,(now-start)/dur), e=1-Math.pow(1-p,3);
+      bd.textContent='$'+(target*e).toFixed(1)+'B';
+      if(p<1)requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  })();
+
+  // ---------- Rain particles ----------
+  const rain=document.getElementById('rainLayer');
+  for(let i=0;i<60;i++){
+    const s=document.createElement('span');
+    s.style.left=(Math.random()*100)+'%';
+    s.style.animationDelay=(Math.random()*1.2)+'s';
+    s.style.animationDuration=(0.8+Math.random()*0.8)+'s';
+    rain.appendChild(s);
+  }
+
+  // ---------- Cascade explorer ----------
+  const cascades={
+    "Hurricane":   {emoji:"🌀",secondaries:["Flash Flood","Storm Surge","High Wind","Tornado","Heavy Rain","Coastal Flood","Debris Flow","Rip Current"]},
+    "Wildfire":    {emoji:"🔥",secondaries:["Debris Flow","Flash Flood","Dense Smoke","Dust Storm","Flood"]},
+    "Thunderstorm":{emoji:"⛈️",secondaries:["Tornado","Flash Flood","Hail","Lightning","Debris Flow"]},
+    "Drought":     {emoji:"🌵",secondaries:["Wildfire","Excessive Heat","Dust Storm","Heat"]},
+    "Winter Storm":{emoji:"❄️",secondaries:["Blizzard","Heavy Snow","Ice Storm","Avalanche","Cold/Wind Chill"]},
+    "Heavy Rain":  {emoji:"🌧️",secondaries:["Flash Flood","Flood","Debris Flow","Landslide"]},
+    "Lightning":   {emoji:"⚡",secondaries:["Wildfire","Flash Flood"]},
+    "Tornado":     {emoji:"🌪️",secondaries:["Flash Flood","Hail","Debris Flow"]},
+    "Storm Surge": {emoji:"🌊",secondaries:["Coastal Flood","Flash Flood","High Surf","Rip Current"]},
+  };
+  const legend=document.getElementById('legend');
+  const primaryBubble=document.getElementById('primaryBubble');
+  const secondaryList=document.getElementById('secondaryList');
+  function render(name){
+    const d=cascades[name];
+    primaryBubble.innerHTML=`<div><div style="font-size:40px">${d.emoji}</div><div style="margin-top:6px">${name}</div></div>`;
+    secondaryList.innerHTML='';
+    d.secondaries.forEach((s,i)=>{
+      const el=document.createElement('div');
+      el.className='sec';
+      el.style.animationDelay=(i*60)+'ms';
+      el.textContent=s;
+      secondaryList.appendChild(el);
+    });
+    document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active',c.dataset.name===name));
+  }
+  Object.keys(cascades).forEach((k,i)=>{
+    const c=document.createElement('div');
+    c.className='chip'+(i===0?' active':'');
+    c.dataset.name=k;
+    c.innerHTML=`${cascades[k].emoji} ${k}`;
+    c.onclick=()=>render(k);
+    legend.appendChild(c);
+  });
+  render('Hurricane');
+  let idx=0;const keys=Object.keys(cascades);
+  setInterval(()=>{idx=(idx+1)%keys.length;render(keys[idx]);},5000);
+
+  // ---------- Pairs chart ----------
+  const ctx=document.getElementById('pairsChart').getContext('2d');
+  const grad=(c1,c2)=>{const g=ctx.createLinearGradient(0,0,400,0);g.addColorStop(0,c1);g.addColorStop(1,c2);return g;};
+  new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:['T-Storm → Tornado','Hurricane → Flash Flood','Heavy Rain → Flash Flood','Lightning → Wildfire','Winter Storm → Heavy Snow','Drought → Wildfire','Tornado → Hail','Storm Surge → Coastal Flood'],
+      datasets:[{
+        label:'Observed cascades',
+        data:[18420,14210,12880,9540,8120,7340,5610,4290],
+        backgroundColor:[
+          grad('#ff3d7f','#ffd23f'),
+          grad('#4cc9f0','#06d6a0'),
+          grad('#a06cd5','#ff3d7f'),
+          grad('#ffd23f','#ff8a3d'),
+          grad('#06d6a0','#4cc9f0'),
+          grad('#ff8a3d','#ffd23f'),
+          grad('#a06cd5','#4cc9f0'),
+          grad('#06d6a0','#a06cd5'),
+        ],
+        borderRadius:10,borderSkipped:false
+      }]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{backgroundColor:'#161c3d',titleColor:'#ffd23f',bodyColor:'#fff',borderColor:'#ff3d7f',borderWidth:1,padding:12,cornerRadius:10}},
+      scales:{x:{ticks:{color:'#9aa3c7'},grid:{color:'rgba(255,255,255,.06)'}},y:{ticks:{color:'#f5f7ff',font:{weight:'600',size:11}},grid:{display:false}}},
+      animation:{duration:1400,easing:'easeOutQuart'}
+    }
+  });
+
+  // ---------- Damage chart ----------
+  const dctx=document.getElementById('damageChart').getContext('2d');
+  new Chart(dctx,{
+    type:'bar',
+    data:{
+      labels:['Hurricane','Wildfire','Flood','Tornado','Winter Storm','Drought'],
+      datasets:[
+        {
+          label:'Solo event (avg $K)',
+          data:[980,420,210,150,90,60],
+          backgroundColor:'rgba(154,163,199,.55)',
+          borderRadius:8,
+        },
+        {
+          label:'Cascade event (avg $K)',
+          data:[8600,3900,1850,1200,680,520],
+          backgroundColor:(c)=>{
+            const g=dctx.createLinearGradient(0,0,0,300);
+            g.addColorStop(0,'#ff3d7f');g.addColorStop(1,'#ff8a3d');return g;
+          },
+          borderRadius:8,
+        }
+      ]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#f5f7ff',boxWidth:12,font:{size:11}}},
+        tooltip:{backgroundColor:'#161c3d',titleColor:'#ffd23f',bodyColor:'#fff',borderColor:'#ff3d7f',borderWidth:1,padding:12,cornerRadius:10,
+          callbacks:{label:(ctx)=>' '+ctx.dataset.label+': $'+ctx.parsed.y.toLocaleString()+'K'}}
+      },
+      scales:{
+        x:{ticks:{color:'#9aa3c7',font:{size:11}},grid:{display:false}},
+        y:{ticks:{color:'#9aa3c7',callback:v=>'$'+v+'K'},grid:{color:'rgba(255,255,255,.06)'}}
+      },
+      animation:{duration:1400,easing:'easeOutQuart'}
+    }
+  });
+
+  // ---------- Event type grid ----------
+  const types=[
+    ["Hurricane","🌀"],["Tornado","🌪️"],["Flash Flood","💦"],["Flood","🌊"],
+    ["Wildfire","🔥"],["Drought","🌵"],["Lightning","⚡"],["Hail","🧊"],
+    ["Heavy Rain","🌧️"],["Heavy Snow","❄️"],["Blizzard","🌨️"],["Ice Storm","🧊"],
+    ["Winter Storm","☃️"],["Avalanche","🏔️"],["Storm Surge","🌊"],["Coastal Flood","🏖️"],
+    ["High Wind","💨"],["Strong Wind","🌬️"],["T-Storm Wind","⛈️"],["Funnel Cloud","🌪️"],
+    ["Excessive Heat","🥵"],["Heat","☀️"],["Cold/Wind Chill","🥶"],["Frost/Freeze","🧊"],
+    ["Dust Storm","🌫️"],["Dust Devil","🌀"],["Dense Fog","🌁"],["Dense Smoke","💨"],
+    ["Rip Current","🌊"],["High Surf","🏄"],["Tropical Storm","🌀"],["Tropical Depression","🌧️"],
+    ["Tsunami","🌊"],["Volcanic Ash","🌋"],["Waterspout","🌊"],["Debris Flow","⛰️"],
+    ["Landslide","⛰️"],["Lake-Effect Snow","❄️"],["Lakeshore Flood","🏞️"],["Sleet","🌨️"],
+    ["Seiche","🌊"],["Marine Hail","⚓"],["Marine High Wind","⛵"],["Marine Strong Wind","⛵"],
+    ["Marine T-Storm","⛵"],["Astro Low Tide","🌙"],["Freezing Fog","🌫️"],["Extreme Cold","🥶"],
+  ];
+  const tg=document.getElementById('typegrid');
+  types.forEach(([n,e])=>{
+    const d=document.createElement('div');
+    d.className='type';
+    d.innerHTML=`<span class="e">${e}</span>${n}`;
+    tg.appendChild(d);
+  });
+</script>
+</body>
+</html>
